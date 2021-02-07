@@ -1,11 +1,28 @@
-const dotenv = require('dotenv')
-dotenv.config()
-const fastify = require('fastify')({ logger: true })
+
 const { exec } = require("child_process")
 const gatsbyProcesses = require("./hook_commands/gatsby")
+const gatsbyFtpProcesses = require("./hook_commands/gatsby_ftp")
+const FtpDeploy = require("ftp-deploy");
+const ftpDeploy = new FtpDeploy();
+const dotenv = require('dotenv')
+dotenv.config()
 
 let isPublishing = false
 let results = ''
+
+const ftpConfig = {
+  user: process.env.FTP_USERNAME,
+  password: process.env.FTP_PASSWORD,
+  host: process.env.FTP_HOST,
+  port: parseInt(process.env.FTP_PORT),
+  include: ['*', '**/*'],
+  localRoot: __dirname + "/hook_commands",
+  remoteRoot: "/backup/",
+  deleteRemote: false,
+  forcePasv: true,
+  sftp: false
+}
+
 let processes = []
 
 const writeResult = (value) => {
@@ -24,6 +41,17 @@ function ejectRecursive(index) {
   }
 
   writeResult(`=====> command is started [ ${processes[index].command} ] : ${new Date()} : <=====`)
+
+  //ftp commond check
+  if (processes[index].ftp) {
+    ftpDeploy
+      .deploy(ftpConfig)
+      .then(res => {
+        writeResult(`=====> FTP Upload Finished <=====`)
+        ejectRecursive(index + 1)
+      })
+    return
+  }
 
   exec(processes[index].command, processes[index].option, (error, stdout, stderr) => {
     if (error) {
@@ -56,7 +84,7 @@ function ejectRecursive(index) {
   })
 }
 
-fastify.post('/build/:hash', async (request, reply) => {
+module.exports.startBuild = (request, reply) => {
   const receivedHash = request.params.hash
 
   if (isPublishing)
@@ -67,26 +95,12 @@ fastify.post('/build/:hash', async (request, reply) => {
   }
 
   results = ''
-  processes = gatsbyProcesses;
+  processes = gatsbyFtpProcesses;
   writeResult(`Process is starting... : ${new Date()} :`)
   ejectRecursive(0)
   isPublishing = true
 
   return response(true, "build is started")
-})
-
-fastify.get('/build_result', async () => {
-  return results
-})
-
-const start = async () => {
-  try {
-    await fastify.listen(process.env.SERVER_PORT, process.env.SERVER_IP)
-    fastify.log.info(`server listening on ${fastify.server.address().port}`)
-  } catch (err) {
-    fastify.log.error(err)
-    process.exit(1)
-  }
 }
 
-start()
+module.exports.results = () => results

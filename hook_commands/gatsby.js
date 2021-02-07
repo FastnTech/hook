@@ -15,7 +15,16 @@ const copyProcess = {
     option: projectOptions.public
 }
 
-module.exports = [{
+module.exports = [
+    {
+        command: "git reset --hard",
+        option: projectOptions.main
+    },
+    {
+        command: "git clean -df",
+        option: projectOptions.main
+    },
+    {
         command: "git pull",
         option: projectOptions.main
     },
